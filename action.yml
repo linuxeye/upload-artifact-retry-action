@@ -37,45 +37,46 @@ runs:
         pre_command: ${{ inputs.pre_command }}
         post_command: ${{ inputs.post_command }}
 
+    - name: Diagnose available artifacts
+      if: steps.download-1.outcome == 'failure'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        echo "::warning::Upload failed. Requested: ${{ inputs.name }}"
+        echo "Available artifacts in run ${{ github.run_id }}:"
+        gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" \
+          --jq '.artifacts[] | "\(.id)  \(.name)  expired=\(.expired)"' \
+          || echo "::warning::Failed to list artifacts. Ensure the token has 'actions: read' permission."
+
+    - name: Wait before retry
+      if: steps.upload-1.outcome == 'failure'
+      run: sleep 30
+      shell: bash
+
     - name: upload-artifact-verify (try-2)
       id: upload-2
       uses: linuxeye/upload-artifact-verify-action@master
       continue-on-error: true
+      if: ${{ steps.upload-1.outcome == 'failure' }}
       with:
         name: ${{ inputs.name }}
         path: ${{ inputs.path }}
         pre_command: ${{ inputs.pre_command }}
         post_command: ${{ inputs.post_command }}
-      if: ${{ steps.upload-1.outcome == 'failure' }}
+
+    - name: Wait before retry
+      if: steps.upload-2.outcome == 'failure'
+      run: sleep 30
+      shell: bash
 
     - name: upload-artifact-verify (try-3)
       id: upload-3
       uses: linuxeye/upload-artifact-verify-action@master
       continue-on-error: true
-      with:
-        name: ${{ inputs.name }}
-        path: ${{ inputs.path }}
-        pre_command: ${{ inputs.pre_command }}
-        post_command: ${{ inputs.post_command }}
       if: ${{ steps.upload-2.outcome == 'failure' }}
-
-    - name: upload-artifact-verify (try-4)
-      id: upload-4
-      uses: linuxeye/upload-artifact-verify-action@master
-      continue-on-error: true
       with:
         name: ${{ inputs.name }}
         path: ${{ inputs.path }}
         pre_command: ${{ inputs.pre_command }}
         post_command: ${{ inputs.post_command }}
-      if: ${{ steps.upload-3.outcome == 'failure' }}
-
-    - name: upload-artifact-verify (try-5)
-      id: upload-5
-      uses: linuxeye/upload-artifact-verify-action@master
-      with:
-        name: ${{ inputs.name }}
-        path: ${{ inputs.path }}
-        pre_command: ${{ inputs.pre_command }}
-        post_command: ${{ inputs.post_command }}
-      if: ${{ steps.upload-4.outcome == 'failure' }}
